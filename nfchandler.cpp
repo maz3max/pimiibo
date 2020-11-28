@@ -68,6 +68,33 @@ void NFCHandler::writeAmiibo(Amiibo *amiibo) {
     writeBuffer(amiibo->encryptedBuffer);
 }
 
+void NFCHandler::unlockAmiibo(const Amiibo *amiibo) {
+  //TODO: check if this is already an amiibo:
+  //TODO: check if AUTH0 is 04 (default 0xff) (page 131, byte 3 or address 527)
+  //TODO: check if ACCESS is 5F (default 0x00) (page 132, byte 0 or address 528)
+  printf("Trying to unlock Amiibo with generated PWD\n");
+  uint8_t sendData[5] = {
+    0x1b,
+    amiibo->encryptedBuffer[532],
+    amiibo->encryptedBuffer[533],
+    amiibo->encryptedBuffer[534],
+    amiibo->encryptedBuffer[535],
+  };
+  uint8_t recvData[2] = {};
+  int responseCode = nfc_initiator_transceive_bytes(device, sendData, 5, recvData, 2, 0);
+  if (responseCode == 0) {
+    if (responseCode[0] != 0x80 || responseCode[1] != 0x80) {
+      printf("PACK DOES NOT MATCH! NOT AUTHENTICATED.");
+    }
+    printf("Done\n");
+  } else {
+    printf("Failed\n");
+    fprintf(stderr, "Failed to unlock\n");
+    nfc_perror(device, "Unlock");
+    exit(1);
+  }
+}
+
 void NFCHandler::writeBuffer(const uint8_t *buffer) {
   printf("Writing tag:\n");
   writeDataPages(buffer);
