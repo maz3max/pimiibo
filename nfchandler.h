@@ -21,4 +21,5 @@ private:
   void writeDataPages(const uint8_t buffer[]);
   void writeDynamicLockBytes();
   void writeStaticLockBytes();
+  void unlockAmiibo(const Amiibo *amiibo);
 };

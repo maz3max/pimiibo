@@ -7,7 +7,9 @@
 #include <nfc/nfc.h>
 
 #define PAGE_COUNT 135
-#define WRITE_COMMAND 0XA2
+#define WRITE_COMMAND 0xA2
+#define READ_COMMAND 0x30
+#define AUTH_COMMAND 0x1B
 
 const uint8_t dynamicLockBytes[4] = { 0x01, 0x00, 0x0f, 0xbd };
 const uint8_t staticLockBytes[4] = { 0x00, 0x00, 0x0F, 0xE0 };
@@ -65,6 +67,7 @@ void NFCHandler::writeAmiibo(Amiibo *amiibo) {
     readTagUUID(uuid);
 
     amiibo->setUUID(uuid);
+    unlockAmiibo(amiibo);
     writeBuffer(amiibo->encryptedBuffer);
 }
 
@@ -74,17 +77,24 @@ void NFCHandler::unlockAmiibo(const Amiibo *amiibo) {
   //TODO: check if ACCESS is 5F (default 0x00) (page 132, byte 0 or address 528)
   printf("Trying to unlock Amiibo with generated PWD\n");
   uint8_t sendData[5] = {
-    0x1b,
+    AUTH_COMMAND,
     amiibo->encryptedBuffer[532],
     amiibo->encryptedBuffer[533],
     amiibo->encryptedBuffer[534],
     amiibo->encryptedBuffer[535],
   };
   uint8_t recvData[2] = {};
+
+  // Use raw send/receive methods
+  if (nfc_device_set_property_bool(device, NP_EASY_FRAMING, false) < 0) {
+		fprintf(stderr,  "nfc_device_set_property_bool false\n");
+		exit(1);
+	}
+
   int responseCode = nfc_initiator_transceive_bytes(device, sendData, 5, recvData, 2, 0);
   if (responseCode == 0) {
-    if (responseCode[0] != 0x80 || responseCode[1] != 0x80) {
-      printf("PACK DOES NOT MATCH! NOT AUTHENTICATED.");
+    if (recvData[0] != 0x80 || recvData[1] != 0x80) {
+      fprintf(stderr, "Tag rejeted PWD");
     }
     printf("Done\n");
   } else {
@@ -93,6 +103,12 @@ void NFCHandler::unlockAmiibo(const Amiibo *amiibo) {
     nfc_perror(device, "Unlock");
     exit(1);
   }
+
+  // Switch off raw send/receive methods
+  if (nfc_device_set_property_bool(device, NP_EASY_FRAMING, true) < 0) {
+		fprintf(stderr,  "nfc_device_set_property_bool true\n");
+		exit(1);
+}
 }
 
 void NFCHandler::writeBuffer(const uint8_t *buffer) {
